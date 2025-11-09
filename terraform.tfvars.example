@@ -1,0 +1,24 @@
+# ========================================
+# 設定ファイルのテンプレート
+# ========================================
+# このファイルをコピーして terraform.tfvars を作成してください
+#
+# コピー方法:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# その後、terraform.tfvars に実際の値を設定してください
+
+# S3バケット名（Lambda コードの保存先）
+# s3_bucket = "your-bucket-name"
+
+# S3キー（Lambda デプロイパッケージのパス）
+# s3_key = "notifier.zip"
+
+# Lambda関数名
+# lambda_function_name = "aws-news-notifier"
+
+# AWSリージョン
+# aws_region = "ap-northeast-1"
+
+# Slack Webhook URL（通知の送信先）
+# slack_webhook_url = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
