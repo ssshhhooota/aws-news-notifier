@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import feedparser
 import json
 import os
@@ -14,6 +14,18 @@ RSS_FEED_URL = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
 
 # Slack Webhook URL（環境変数から取得）
 SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
+
+# JSTタイムゾーン（UTC+9）
+JST = timezone(timedelta(hours=9))
+
+
+def utc_to_jst(utc_dt):
+    """UTC日時をJST日時に変換"""
+    # UTCとして設定
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+    # JSTに変換
+    return utc_dt.astimezone(JST)
 
 
 def get_24_hours_ago():
@@ -41,15 +53,18 @@ def get_recent_news():
 
     for entry in feed.entries:
         try:
-            # 公開日時をパース（RSSのpubDateフィールド）
-            pub_date = datetime(*entry.published_parsed[:6])
+            # 公開日時をパース（RSSのpubDateフィールドはUTC）
+            pub_date_utc = datetime(*entry.published_parsed[:6])
+
+            # UTCからJSTに変換
+            pub_date_jst = utc_to_jst(pub_date_utc)
 
             # 24時間以内の記事かチェック
-            if pub_date >= time_threshold:
+            if pub_date_utc >= time_threshold:
                 recent_items.append({
                     'title': entry.title,
                     'link': entry.link,
-                    'published': pub_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'published': pub_date_jst.strftime('%Y-%m-%d %H:%M:%S JST'),
                     'description': entry.get('description', ''),
                     'categories': [tag.term for tag in entry.get('tags', [])]
                 })
@@ -219,8 +234,10 @@ def lambda_handler(event, context):
         failure_count = 0
 
         if len(recent_news) == 0:
-            # 0件の場合の通知
-            time_threshold_str = get_24_hours_ago().strftime('%Y-%m-%d %H:%M:%S')
+            # 0件の場合の通知（JSTに変換）
+            time_threshold_utc = get_24_hours_ago()
+            time_threshold_jst = utc_to_jst(time_threshold_utc)
+            time_threshold_str = time_threshold_jst.strftime('%Y-%m-%d %H:%M:%S JST')
             if send_no_news_notification(time_threshold_str):
                 success_count = 1
             else:
@@ -238,11 +255,15 @@ def lambda_handler(event, context):
 
         logger.info(f"Slack通知完了 - 成功: {success_count}件, 失敗: {failure_count}件")
 
+        # レスポンスのtime_thresholdもJSTに変換
+        response_threshold_utc = get_24_hours_ago()
+        response_threshold_jst = utc_to_jst(response_threshold_utc)
+
         return {
             'statusCode': 200,
             'body': {
                 'message': f'24時間以内のAWS最新情報を{len(recent_news)}件取得しました',
-                'time_threshold': get_24_hours_ago().strftime('%Y-%m-%d %H:%M:%S'),
+                'time_threshold': response_threshold_jst.strftime('%Y-%m-%d %H:%M:%S JST'),
                 'count': len(recent_news),
                 'slack_notifications': {
                     'success': success_count,
